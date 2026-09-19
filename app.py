@@ -3,9 +3,14 @@ from pypdf import PdfReader
 import google.generativeai as genai
 
 st.set_page_config(page_title="PDF Chatbot", page_icon="📄", layout="centered")
-st.title("📄 Chat with your PDF")
+st.title("📄 Pdf Chatbot")
 
-api_key = st.sidebar.text_input("Enter Google Gemini API Key:", type="password")
+# Streamlit secrets-la irundhu automatic-a key edukkum
+api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+# Secrets-la illana mattum optional backup-ku sidebar
+if not api_key:
+    api_key = st.sidebar.text_input("Enter Google Gemini API Key:", type="password")
 
 uploaded_file = st.file_uploader("Upload your PDF file", type=["pdf"])
 
@@ -27,7 +32,7 @@ for message in st.session_state.messages:
 
 if prompt := st.chat_input("Ask any question from this PDF..."):
     if not api_key:
-        st.error("Please enter your Gemini API Key in the sidebar!")
+        st.error("API Key configure aagala! Settings secrets check pannunga.")
     elif not uploaded_file:
         st.error("Please upload a PDF first!")
     else:
@@ -35,19 +40,15 @@ if prompt := st.chat_input("Ask any question from this PDF..."):
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-3.6-flash")
 
-        full_prompt = f"""
-        You are a helpful assistant. Answer the question strictly based on the following document context:
-        ---
-        {pdf_text}
-        ---
-        Question: {prompt}
-        """
+            full_prompt = f"Context from document:\n{pdf_text}\n\nQuestion: {prompt}\n\nPlease answer accurately using only the above context."
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = model.generate_content(full_prompt)
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            with st.chat_message("assistant"):
+                response = model.generate_content(full_prompt, stream=True)
+                full_res = st.write_stream(chunk.text for chunk in response)
+                st.session_state.messages.append({"role": "assistant", "content": full_res})
+        except Exception as e:
+            st.error(f"Error: {e}")
